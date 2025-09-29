@@ -107,12 +107,16 @@ class APIConfig {
         } catch (error) {
             console.error('API Request Error:', error);
             
-            // For local development CORS errors, try proxy
+            // For local development CORS errors, try proxy for GET requests
             if (this.isDevelopment() && error.name === 'TypeError' && 
                 (error.message.includes('CORS') || error.message.includes('Failed to fetch'))) {
                 console.log('🔄 CORS error in local dev, trying proxy...');
                 if (!options.method || options.method === 'GET') {
                     return this.makeRequestWithProxy(endpoint, options);
+                } else {
+                    // For POST requests blocked by CORS, likely a cold start issue
+                    console.log('❌ POST request blocked by CORS - backend might be cold starting');
+                    throw new Error(`🕒 Backend Server Starting: The server is likely cold-starting (common on free hosting). Please wait 1-2 minutes and try again. If the problem persists, the server may need to add localhost:3000 to its CORS settings.`);
                 }
             }
             
@@ -222,5 +226,47 @@ class APIConfig {
             // For non-GET requests or if proxy also fails, throw the original error
             throw error;
         }
+    }
+
+    /**
+     * Warm up the server with a health check to wake it from cold start
+     * @returns {Promise<boolean>} True if server is responding
+     */
+    static async warmUpServer() {
+        try {
+            console.log('🔄 Warming up server (checking for cold start)...');
+            const response = await fetch(`${this.BASE_URL}/health`, {
+                method: 'GET',
+                mode: 'cors',
+                credentials: 'omit'
+            });
+            
+            console.log(`✅ Server responded with status: ${response.status}`);
+            return response.ok;
+        } catch (error) {
+            console.log('⏳ Server appears to be cold starting...');
+            return false;
+        }
+    }
+
+    /**
+     * Make a request with server warm-up for POST requests
+     * @param {string} endpoint - API endpoint  
+     * @param {Object} options - Fetch options
+     * @returns {Promise<Object>} API response
+     */
+    static async makeRequestWithWarmup(endpoint, options = {}) {
+        // For POST requests, try to warm up server first
+        if (options.method === 'POST') {
+            const isWarmed = await this.warmUpServer();
+            if (!isWarmed) {
+                throw new Error('🕒 Backend server is cold-starting. Please wait 30-60 seconds and try again.');
+            }
+            
+            // Small delay to ensure server is fully ready
+            await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+        
+        return this.makeRequest(endpoint, options);
     }
 }

@@ -389,8 +389,8 @@ class EmailSender {
         }
         
         try {
-            // Test Gmail connection via local backend
-            const result = await APIConfig.makeRequest('/api/test-connection', {
+            // Test Gmail connection via local backend with server warm-up
+            const result = await APIConfig.makeRequestWithWarmup('/api/test-connection', {
                 method: 'POST',
                 body: JSON.stringify({
                     email: this.senderEmail,
