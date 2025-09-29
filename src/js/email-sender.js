@@ -78,6 +78,16 @@ class EmailSender {
         safeAddEventListener('startCampaign', 'click', () => {
             this.startEmailCampaign();
         });
+        
+        // Gmail password input formatting
+        safeAddEventListener('gmailPassword', 'input', (e) => {
+            this.formatGmailPassword(e);
+        });
+        
+        safeAddEventListener('gmailPassword', 'paste', (e) => {
+            // Handle paste events
+            setTimeout(() => this.formatGmailPassword(e), 10);
+        });
     }
     
     async handleStep1Submit() {
@@ -277,6 +287,42 @@ class EmailSender {
         this.showAlert('success', `✅ Resume uploaded: ${file.name} (${(file.size/1024/1024).toFixed(2)} MB)`);
     }
     
+    formatGmailPassword(e) {
+        const input = e.target;
+        let value = input.value;
+        
+        // Remove any spaces
+        value = value.replace(/\s/g, '');
+        
+        // Limit to 16 characters
+        if (value.length > 16) {
+            value = value.substring(0, 16);
+        }
+        
+        // Update the input
+        input.value = value;
+        
+        // Update visual feedback
+        const formText = input.parentElement.querySelector('.form-text') || 
+                        input.parentElement.parentElement.querySelector('.form-text');
+        
+        if (formText && value.length > 0) {
+            if (value.length === 16) {
+                formText.innerHTML = `
+                    Enter your Gmail App Password (NOT your regular password).
+                    <br><strong>This password is not stored anywhere and only used for sending emails.</strong>
+                    <br><span class="text-success"><i class="fas fa-check me-1"></i>Length: ${value.length}/16 characters ✓</span>
+                `;
+            } else {
+                formText.innerHTML = `
+                    Enter your Gmail App Password (NOT your regular password).
+                    <br><strong>This password is not stored anywhere and only used for sending emails.</strong>
+                    <br><span class="text-warning"><i class="fas fa-info-circle me-1"></i>Length: ${value.length}/16 characters</span>
+                `;
+            }
+        }
+    }
+    
     async testGmailConnection() {
         const passwordInput = document.getElementById('gmailPassword');
         const statusDiv = document.getElementById('connectionStatus');
@@ -292,7 +338,7 @@ class EmailSender {
             return;
         }
         
-        const password = passwordInput.value.trim();
+        let password = passwordInput.value.trim();
         
         if (!password) {
             if (statusDiv) {
@@ -301,9 +347,34 @@ class EmailSender {
             return;
         }
         
+        // Remove any spaces from the password (Gmail sometimes formats with spaces)
+        password = password.replace(/\s/g, '');
+        
+        // Validate password format
         if (password.length !== 16) {
             if (statusDiv) {
-                statusDiv.innerHTML = '<div class="connection-error">Gmail App Password should be 16 characters long</div>';
+                statusDiv.innerHTML = `
+                    <div class="connection-error">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Gmail App Password should be 16 characters long
+                        <br><small class="text-muted">Current length: ${password.length} characters</small>
+                        <br><small class="text-muted">Make sure to copy the password without spaces</small>
+                    </div>
+                `;
+            }
+            return;
+        }
+        
+        // Validate that it contains only valid characters (letters and numbers)
+        if (!/^[a-zA-Z0-9]{16}$/.test(password)) {
+            if (statusDiv) {
+                statusDiv.innerHTML = `
+                    <div class="connection-error">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Gmail App Password should contain only letters and numbers
+                        <br><small class="text-muted">Invalid characters detected</small>
+                    </div>
+                `;
             }
             return;
         }

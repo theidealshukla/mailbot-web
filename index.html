@@ -193,7 +193,8 @@ Adarsh Kumar Shukla</textarea>
                             </label>
                             <div class="input-group">
                                 <input type="password" class="form-control" id="gmailPassword" 
-                                       placeholder="Enter 16-character app password" required>
+                                       placeholder="Paste 16-character app password (no spaces)" 
+                                       maxlength="16" required>
                                 <button class="btn btn-outline-secondary" type="button" id="togglePassword">
                                     <i class="fas fa-eye"></i>
                                 </button>
@@ -201,6 +202,7 @@ Adarsh Kumar Shukla</textarea>
                             <div class="form-text">
                                 Enter your Gmail App Password (NOT your regular password).
                                 <br><strong>This password is not stored anywhere and only used for sending emails.</strong>
+                                <br><span class="text-info"><i class="fas fa-info-circle me-1"></i>Length: 0/16 characters</span>
                             </div>
                         </div>
 
@@ -334,6 +336,9 @@ Adarsh Kumar Shukla</textarea>
         let emailSender;
         
         document.addEventListener('DOMContentLoaded', function() {
+            // Show local development tip if needed
+            showLocalDevTip();
+            
             // Initialize the main EmailSender class
             emailSender = new EmailSender();
             
@@ -341,17 +346,35 @@ Adarsh Kumar Shukla</textarea>
             testAPIConnection();
         });
         
+        // Show local development tip if needed
+        function showLocalDevTip() {
+            if (APIConfig.isDevelopment() && !APIConfig.isCompatiblePort()) {
+                const container = document.querySelector('.container');
+                const tipBanner = document.createElement('div');
+                tipBanner.className = 'alert alert-info alert-dismissible fade show';
+                tipBanner.innerHTML = `
+                    <i class="fas fa-lightbulb me-2"></i>
+                    <strong>💡 Local Development Tip:</strong>
+                    For best results, run on port 3000: <code>python -m http.server 3000</code>
+                    <br>Current: <code>${window.location.origin}</code> | Recommended: <code>http://localhost:3000</code>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                `;
+                container.insertBefore(tipBanner, container.firstChild);
+            }
+        }
+        
         // Test API connection and update status
         async function testAPIConnection() {
             try {
-                const isConnected = await APIConfig.testConnection();
+                const connectionResult = await APIConfig.testConnection();
                 const statusElement = document.getElementById('automationStatus');
                 
-                if (isConnected) {
+                if (connectionResult.connected) {
+                    const method = connectionResult.method === 'proxy' ? ' (via CORS proxy)' : '';
                     statusElement.className = 'alert alert-success';
                     statusElement.innerHTML = `
                         <i class="fas fa-cloud me-2"></i>
-                        <strong>🚀 Backend Connected Successfully</strong>
+                        <strong>🚀 Backend Connected Successfully${method}</strong>
                         <ul class="mt-2 mb-0">
                             <li>Backend API hosted on Render: <code>https://coldmailbot-api-1.onrender.com/</code></li>
                             <li>Gmail SMTP integration with resume attachments</li>
@@ -359,22 +382,57 @@ Adarsh Kumar Shukla</textarea>
                             <li>Secure password handling (not stored locally)</li>
                             <li>Real-time email sending with progress tracking</li>
                         </ul>
+                        ${connectionResult.method === 'proxy' ? '<div class="mt-2 p-2 bg-info text-white rounded"><small><i class="fas fa-info-circle me-1"></i>Note: Using CORS proxy for GitHub Pages compatibility. Some features may be limited.</small></div>' : ''}
                     `;
                 } else {
-                    statusElement.className = 'alert alert-warning';
-                    statusElement.innerHTML = `
-                        <i class="fas fa-exclamation-triangle me-2"></i>
-                        <strong>⚠️ Backend Connection Issue</strong>
-                        <p class="mt-2 mb-0">
-                            Cannot connect to backend API. This might be due to:
-                            <br>• Backend server is starting up (please wait 1-2 minutes)
-                            <br>• Network connectivity issues
-                            <br>• Backend maintenance
-                        </p>
-                    `;
+                    // Check for specific error types
+                    const error = connectionResult.error || 'Unknown error';
+                    
+                    if (error.includes('CORS')) {
+                        statusElement.className = 'alert alert-danger';
+                        statusElement.innerHTML = `
+                            <i class="fas fa-exclamation-circle me-2"></i>
+                            <strong>❌ CORS Configuration Issue</strong>
+                            <p class="mt-2 mb-2">
+                                The backend server needs to be configured to allow requests from GitHub Pages.
+                                <br><strong>Current Status:</strong> Backend is running but rejecting cross-origin requests.
+                            </p>
+                            <div class="mt-3 p-2 bg-light rounded">
+                                <strong>🔧 To fix this issue:</strong>
+                                <br>• Backend needs to add GitHub Pages domain to CORS allowed origins
+                                <br>• Current allowed origin: <code>http://localhost:3000</code>
+                                <br>• Needed origin: <code>https://theidealshukla.github.io</code>
+                            </div>
+                        `;
+                    } else {
+                        statusElement.className = 'alert alert-warning';
+                        statusElement.innerHTML = `
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>⚠️ Backend Connection Issue</strong>
+                            <p class="mt-2 mb-2">
+                                <strong>Error:</strong> ${error}
+                            </p>
+                            <p class="mt-2 mb-0">
+                                This might be due to:
+                                <br>• Backend server is starting up (please wait 1-2 minutes)
+                                <br>• Network connectivity issues
+                                <br>• Backend maintenance
+                            </p>
+                            <button class="btn btn-outline-primary btn-sm mt-2" onclick="testAPIConnection()">
+                                <i class="fas fa-sync-alt me-1"></i>Retry Connection
+                            </button>
+                        `;
+                    }
                 }
             } catch (error) {
                 console.error('API connection test failed:', error);
+                const statusElement = document.getElementById('automationStatus');
+                statusElement.className = 'alert alert-danger';
+                statusElement.innerHTML = `
+                    <i class="fas fa-times-circle me-2"></i>
+                    <strong>❌ Connection Failed</strong>
+                    <p class="mt-2 mb-0">Unexpected error: ${error.message}</p>
+                `;
             }
         }
         
